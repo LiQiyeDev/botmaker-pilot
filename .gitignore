@@ -1,0 +1,19 @@
+# Node / Vite
+node_modules/
+web/node_modules/
+*.log
+.DS_Store
+
+# Vite build output is committed as a fallback Studio can serve without Node —
+# see the umbrella plan. If you prefer to keep it out of git, unignore here and
+# always build with `mvn -Ppilot`.
+# web/dist/
+
+# Capacitor / Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk
+*.keystore
