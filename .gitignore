@@ -4,10 +4,10 @@ web/node_modules/
 *.log
 .DS_Store
 
-# Vite build output is committed as a fallback Studio can serve without Node —
-# see the umbrella plan. If you prefer to keep it out of git, unignore here and
-# always build with `mvn -Ppilot`.
-# web/dist/
+# Vite build output — transient. The served fallback lives in the Studio submodule
+# (botmaker-studio/src/main/resources/pilot/, refreshed by `mvn -Ppilot`), so this
+# dist/ is regenerated locally and not tracked here.
+web/dist/
 
 # Capacitor / Android
 android/.gradle/

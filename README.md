@@ -22,6 +22,28 @@ botmaker-pilot/
 The same `web/` build is served two ways: directly by Studio for browsers, and bundled into the APK by
 Capacitor for a native mobile app.
 
+## Building
+
+```bash
+# Web UI (browser + PWA)
+cd web && npm ci && npm run build      # → web/dist
+#   dev loop: npm run dev
+
+# Android APK (from the pilot root)
+npm ci                                 # Capacitor CLI + native deps
+npm run build:web                      # produces web/dist
+npx cap sync android                   # copy dist into the native project
+cd android && ./gradlew assembleDebug  # → android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Studio serves the web UI itself: a prebuilt `dist` is committed under
+`botmaker-studio/src/main/resources/pilot/`, and `mvn -Ppilot package` in Studio rebuilds it from this
+`web/` source (downloading a project-local Node — nothing installed system-wide).
+
+The APK bundles `web/dist` locally and loads it from the `https://localhost` WebView origin, then connects
+out to Studio's `PilotServer` over a plain `ws://` across the Tailscale tunnel (the tunnel, not TLS,
+encrypts the transport — hence `server.cleartext` in `capacitor.config.ts`).
+
 ## Protocol (WebSocket `/ws?token=…`)
 
 | Direction | Type | Payload |
@@ -32,4 +54,5 @@ Capacitor for a native mobile app.
 
 ## Status
 
-Early development. See the umbrella repo `botmaker/` and its plan for the build-out.
+Web client (browser + PWA) and Android APK build end-to-end against Studio's `PilotServer`. See the
+umbrella repo `botmaker/` for the server side.
