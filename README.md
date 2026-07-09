@@ -1,8 +1,11 @@
 # BotPilot
 
 Remote companion client for **BotMaker Studio**. It shows a live preview of the running bot and can
-start / stop / pause / resume it, from a browser or an installable Android app — from anywhere, over
-real HTTPS via [Tailscale](https://tailscale.com) Funnel (with a plain-`ws://` tailnet/LAN fallback).
+start / stop / pause / resume it, from a browser or an installable Android app. The **default** path is over
+your [Tailscale](https://tailscale.com) tailnet — the phone runs Tailscale signed into the same account (zero
+computer-side setup, nothing exposed publicly). Reaching the bot from **anywhere with no VPN on the phone** is
+an optional "Advanced" step in Studio that turns on Tailscale **Funnel** (public HTTPS); a plain-`ws://` LAN
+bind is the last-resort fallback.
 
 BotPilot is the client half; the server half lives in **BotMaker Studio** (`services/pilot/PilotServer`),
 which serves this UI over HTTP and speaks a WebSocket protocol carrying:
@@ -29,7 +32,9 @@ Capacitor for a native mobile app.
   autofocus) — a robust continuous-decode loop that stays smooth while the camera moves toward the code — and
   decodes Studio's **left** pairing QR straight into `parseUrl` → connect. No URL typing, no registration. Pasting a URL still works as a fallback. The APK
   declares `CAMERA` (see `AndroidManifest.xml`) and requests it on launch (`MainActivity`) so the WebView
-  camera is grantable.
+  camera is grantable. The scanner **re-initializes on resume** (`visibilitychange`/focus): backgrounding the
+  app (e.g. opening the native camera) suspends the camera track, so it re-acquires a fresh one on return
+  instead of showing a frozen/black frame.
 - **Connection history & reconnect.** Endpoints are remembered as a list (`web/src/config.ts`,
   `botpilot.connections`, migrated from the old single-endpoint key). The connect screen shows a **Recent
   connections** list — tap to reconnect without rescanning (Studio now keeps a **stable pairing token**, so a
@@ -60,10 +65,10 @@ Studio serves the web UI itself: a prebuilt `dist` is committed under
 `botmaker-studio/src/main/resources/pilot/`, and `mvn -Ppilot package` in Studio rebuilds it from this
 `web/` source (downloading a project-local Node — nothing installed system-wide).
 
-The APK bundles `web/dist` locally and loads it from the `https://localhost` WebView origin. On the primary
-(Funnel) path it connects out to Studio over `wss://` — real TLS on a public `*.ts.net` host. `server.cleartext`
-in `capacitor.config.ts` is kept only so the same APK can also reach a plain `ws://` PilotServer on a LAN/tailnet
-IP for local development.
+The APK bundles `web/dist` locally and loads it from the `https://localhost` WebView origin. On the default
+(tailnet) path it connects out to Studio over plain `ws://` to the Tailscale `100.x` IP (the tailnet itself is
+the encryption), which is why `server.cleartext` is enabled in `capacitor.config.ts`. On the optional Funnel
+path it instead connects over `wss://` — real TLS on a public `*.ts.net` host.
 
 ## Remote access over HTTPS (Tailscale Funnel)
 
