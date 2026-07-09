@@ -1,16 +1,33 @@
 import { useState } from "react";
 import type { Endpoint } from "./types";
-import { parseUrl } from "./config";
+import {
+  parseUrl,
+  loadConnections,
+  removeConnection,
+  type SavedConnection,
+} from "./config";
 import { QrScanner } from "./QrScanner";
+import { useAppUpdate, LATEST_APK_URL } from "./useAppUpdate";
 
 interface Props {
   initial: Endpoint | null;
   onConnect: (ep: Endpoint) => void;
 }
 
+/** Relative "3m ago" / "2d ago" from an epoch millis timestamp. */
+function ago(ts: number): string {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
 /**
- * First-run pairing screen (used by the APK, and by a browser opened without a token). Accepts either a
- * pasted full URL from Studio's "Enable Remote Pilot" dialog, or manual host / port / token fields.
+ * First-run / reconnect pairing screen (used by the APK, and by a browser opened without a token). Offers a
+ * list of previously-used connections to reconnect without rescanning, a QR scan, or manual host/port/token.
  */
 export function ConnectScreen({ initial, onConnect }: Props) {
   const [host, setHost] = useState(initial?.host ?? "");
@@ -19,6 +36,8 @@ export function ConnectScreen({ initial, onConnect }: Props) {
   const [secure, setSecure] = useState(initial?.secure ?? false);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [recent, setRecent] = useState<SavedConnection[]>(() => loadConnections());
+  const { version, result, checkNow } = useAppUpdate();
 
   const applyPaste = (text: string) => {
     const ep = parseUrl(text);
@@ -42,6 +61,8 @@ export function ConnectScreen({ initial, onConnect }: Props) {
     }
   };
 
+  const forget = (ep: Endpoint) => setRecent(removeConnection(ep));
+
   const submit = () => {
     const p = Number(port);
     if (!host || !p || !token) {
@@ -61,6 +82,25 @@ export function ConnectScreen({ initial, onConnect }: Props) {
       <p className="muted">
         In BotMaker Studio open <b>Remote Pilot</b>, then scan the QR — nothing to install or register.
       </p>
+
+      {recent.length > 0 && (
+        <div className="recent">
+          <label>Recent connections</label>
+          {recent.map((c) => (
+            <div className="recent-row" key={`${c.endpoint.host}:${c.endpoint.port}`}>
+              <button className="recent-connect" onClick={() => onConnect(c.endpoint)}>
+                <span className="recent-label">{c.label}</span>
+                <span className="recent-meta">
+                  {c.endpoint.secure ? "https" : "http"} · {ago(c.lastConnected)}
+                </span>
+              </button>
+              <button className="recent-x" onClick={() => forget(c.endpoint)} aria-label="Forget">
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <button className="scan" onClick={() => setScanning(true)}>📷 Scan QR</button>
 
@@ -95,6 +135,20 @@ export function ConnectScreen({ initial, onConnect }: Props) {
 
       {error && <p className="error">{error}</p>}
       <button className="go" onClick={submit}>Connect</button>
+
+      <div className="about">
+        <span>BotPilot v{version}</span>
+        <button className="check-update" onClick={checkNow} disabled={result === "checking"}>
+          {result === "checking" ? "Checking…" : "Check for updates"}
+        </button>
+        {result === "uptodate" && <span className="about-note">Up to date</span>}
+        {result === "available" && (
+          <a className="about-note update" href={LATEST_APK_URL} target="_blank" rel="noreferrer">
+            Update available — Get it
+          </a>
+        )}
+        {result === "error" && <span className="about-note">Couldn’t check (offline?)</span>}
+      </div>
     </div>
   );
 }

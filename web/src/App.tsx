@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Endpoint } from "./types";
-import { initialEndpoint, saveEndpoint } from "./config";
+import { initialEndpoint, upsertConnection, touchConnection } from "./config";
 import { usePilot } from "./usePilot";
 import { Renderer } from "./Renderer";
 import { ConnectScreen } from "./ConnectScreen";
@@ -11,6 +11,18 @@ export function App() {
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const { available: updateAvailable, latest } = useAppUpdate();
   const { status, runState, frameRef, overlaysRef, send } = usePilot(endpoint);
+
+  // Once a socket actually opens, bump the connection's recency so it sorts to the top of "Recent".
+  useEffect(() => {
+    if (status === "connected" && endpoint) touchConnection(endpoint);
+  }, [status, endpoint]);
+
+  const connect = (ep: Endpoint) => {
+    upsertConnection(ep);
+    setEndpoint(ep);
+  };
+  // Non-destructive: drop the live socket but keep the endpoint in history so it stays in "Recent".
+  const disconnect = () => setEndpoint(null);
 
   const updateBanner =
     updateAvailable && !updateDismissed ? (
@@ -29,18 +41,10 @@ export function App() {
     return (
       <>
         {updateBanner}
-        <ConnectScreen
-          initial={null}
-          onConnect={(ep) => {
-            saveEndpoint(ep);
-            setEndpoint(ep);
-          }}
-        />
+        <ConnectScreen initial={null} onConnect={connect} />
       </>
     );
   }
-
-  const disconnect = () => setEndpoint(null);
 
   return (
     <div className="app">
@@ -54,6 +58,12 @@ export function App() {
 
       <div className="stage">
         <Renderer frameRef={frameRef} overlaysRef={overlaysRef} />
+        {status !== "connected" && (
+          <div className="reconnect-overlay">
+            <p>{status === "connecting" ? "Connecting…" : "Can’t reach this connection — retrying…"}</p>
+            <button className="switch" onClick={disconnect}>Switch connection</button>
+          </div>
+        )}
       </div>
 
       <nav className="controls">

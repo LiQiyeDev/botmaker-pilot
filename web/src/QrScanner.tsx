@@ -31,6 +31,11 @@ export function QrScanner({ onResult, onCancel }: Props) {
     let stream: MediaStream | null = null;
     let raf = 0;
     let done = false;
+    let lastDecode = 0;
+    // Decode off a small fixed-size canvas (not the native camera resolution): jsQR/BarcodeDetector cost
+    // scales with pixel count, and full-res decode on the main thread is what stalls the live preview.
+    const DECODE_MAX = 640; // longest edge fed to the decoder
+    const DECODE_INTERVAL_MS = 100; // ~10 Hz — plenty for a static QR, keeps the video smooth
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const native = makeNativeDetector();
@@ -43,12 +48,15 @@ export function QrScanner({ onResult, onCancel }: Props) {
 
     const scan = async () => {
       const video = videoRef.current;
-      if (done || !video || video.readyState < 2 || !ctx) {
+      const now = performance.now();
+      if (done || !video || video.readyState < 2 || !ctx || now - lastDecode < DECODE_INTERVAL_MS) {
         raf = requestAnimationFrame(scan);
         return;
       }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      lastDecode = now;
+      const scale = Math.min(1, DECODE_MAX / Math.max(video.videoWidth, video.videoHeight));
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       try {
         if (native) {
@@ -68,7 +76,11 @@ export function QrScanner({ onResult, onCancel }: Props) {
     (async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
           audio: false,
         });
         const video = videoRef.current;

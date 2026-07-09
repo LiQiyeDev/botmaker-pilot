@@ -13,6 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Dark window background so any residual safe-area / cutout gutter is never bare white. -->
+        <item name="android:windowBackground">#FF0F1115</item>
     </style>
 
 

@@ -25,14 +25,22 @@ Capacitor for a native mobile app.
 ### Pairing & updates
 
 - **Pairing by QR scan.** The connect screen has a **📷 Scan QR** button (`web/src/QrScanner.tsx`): it opens
-  the rear camera (`getUserMedia`, native `BarcodeDetector` with a `jsqr` fallback) and decodes Studio's
-  **left** pairing QR straight into `parseUrl` → connect. No URL typing, no registration. Pasting a URL still
-  works as a fallback. The APK declares `CAMERA` (see `AndroidManifest.xml`) and requests it on launch
-  (`MainActivity`) so the WebView camera is grantable.
+  the rear camera (`getUserMedia`, native `BarcodeDetector` with a `jsqr` fallback; capped resolution +
+  downscaled, throttled decode so the preview stays smooth) and decodes Studio's **left** pairing QR straight
+  into `parseUrl` → connect. No URL typing, no registration. Pasting a URL still works as a fallback. The APK
+  declares `CAMERA` (see `AndroidManifest.xml`) and requests it on launch (`MainActivity`) so the WebView
+  camera is grantable.
+- **Connection history & reconnect.** Endpoints are remembered as a list (`web/src/config.ts`,
+  `botpilot.connections`, migrated from the old single-endpoint key). The connect screen shows a **Recent
+  connections** list — tap to reconnect without rescanning (Studio now keeps a **stable pairing token**, so a
+  saved connection stays valid across Studio restarts). When a socket is stuck reconnecting, a **Switch
+  connection** overlay returns to the list without dropping the saved entry.
 - **In-app auto-update.** On launch the app best-effort checks the latest GitHub release
   (`web/src/useAppUpdate.ts`, throttled) and, if newer than the built-in `__APP_VERSION__` (injected from
   `web/package.json`), shows an **Update available** banner linking to the stable
-  `releases/latest/download/botpilot.apk`. Keep `web/package.json`'s `version` in step with the release tags.
+  `releases/latest/download/botpilot.apk`. The connect-screen footer also shows the current version and a
+  **Check for updates** button (force-checks, ignoring the throttle). Keep `web/package.json`'s `version` in
+  step with the release tags.
 
 ## Building
 
