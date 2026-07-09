@@ -1,44 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import jsQR from "jsqr";
+import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
 
 interface Props {
   onResult: (text: string) => void;
   onCancel: () => void;
 }
 
-// Native BarcodeDetector where the WebView/browser has it (fast, hardware-backed); jsQR is the fallback.
-type NativeDetector = { detect: (src: CanvasImageSource) => Promise<Array<{ rawValue: string }>> };
-function makeNativeDetector(): NativeDetector | null {
-  const BD = (globalThis as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => NativeDetector })
-    .BarcodeDetector;
-  try {
-    return BD ? new BD({ formats: ["qr_code"] }) : null;
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Fullscreen camera QR scanner. Opens the rear camera, decodes each frame (native BarcodeDetector when
- * available, else jsQR), and fires {@code onResult} with the first decoded string. Always stops the camera
- * tracks on unmount / cancel.
+ * Fullscreen camera QR scanner backed by ZXing (@zxing/browser). ZXing owns a robust continuous-decode loop
+ * (far more tolerant of angle/lighting/motion than the old hand-rolled jsQR pass), driving our own <video>
+ * element so we keep the overlay UI. We ask for the rear camera with continuous autofocus so moving the phone
+ * toward the code doesn't stall on a focus hunt. Camera tracks + the decode loop are always torn down on
+ * unmount / cancel via the returned scanner controls.
  */
 export function QrScanner({ onResult, onCancel }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    let raf = 0;
+    let controls: IScannerControls | null = null;
     let done = false;
-    let lastDecode = 0;
-    // Decode off a small fixed-size canvas (not the native camera resolution): jsQR/BarcodeDetector cost
-    // scales with pixel count, and full-res decode on the main thread is what stalls the live preview.
-    const DECODE_MAX = 640; // longest edge fed to the decoder
-    const DECODE_INTERVAL_MS = 100; // ~10 Hz — plenty for a static QR, keeps the video smooth
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    const native = makeNativeDetector();
 
     const finish = (text: string) => {
       if (done) return;
@@ -46,48 +27,27 @@ export function QrScanner({ onResult, onCancel }: Props) {
       onResult(text);
     };
 
-    const scan = async () => {
-      const video = videoRef.current;
-      const now = performance.now();
-      if (done || !video || video.readyState < 2 || !ctx || now - lastDecode < DECODE_INTERVAL_MS) {
-        raf = requestAnimationFrame(scan);
-        return;
-      }
-      lastDecode = now;
-      const scale = Math.min(1, DECODE_MAX / Math.max(video.videoWidth, video.videoHeight));
-      canvas.width = Math.round(video.videoWidth * scale);
-      canvas.height = Math.round(video.videoHeight * scale);
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      try {
-        if (native) {
-          const codes = await native.detect(canvas);
-          if (codes[0]?.rawValue) return finish(codes[0].rawValue);
-        } else {
-          const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
-          if (code?.data) return finish(code.data);
-        }
-      } catch {
-        /* transient decode error — keep scanning */
-      }
-      raf = requestAnimationFrame(scan);
-    };
-
     (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: false,
-        });
         const video = videoRef.current;
         if (!video) return;
-        video.srcObject = stream;
-        await video.play();
-        raf = requestAnimationFrame(scan);
+        const reader = new BrowserQRCodeReader();
+        controls = await reader.decodeFromConstraints(
+          {
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              // @ts-expect-error focusMode is a valid MediaTrackConstraint on mobile, not yet in the TS lib DOM types
+              focusMode: "continuous",
+            },
+            audio: false,
+          },
+          video,
+          (result) => {
+            if (result) finish(result.getText());
+          }
+        );
       } catch (e) {
         const name = (e as { name?: string }).name;
         setError(
@@ -100,8 +60,7 @@ export function QrScanner({ onResult, onCancel }: Props) {
 
     return () => {
       done = true;
-      cancelAnimationFrame(raf);
-      if (stream) stream.getTracks().forEach((t) => t.stop());
+      controls?.stop();
     };
   }, [onResult]);
 

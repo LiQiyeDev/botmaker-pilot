@@ -25,9 +25,9 @@ Capacitor for a native mobile app.
 ### Pairing & updates
 
 - **Pairing by QR scan.** The connect screen has a **📷 Scan QR** button (`web/src/QrScanner.tsx`): it opens
-  the rear camera (`getUserMedia`, native `BarcodeDetector` with a `jsqr` fallback; capped resolution +
-  downscaled, throttled decode so the preview stays smooth) and decodes Studio's **left** pairing QR straight
-  into `parseUrl` → connect. No URL typing, no registration. Pasting a URL still works as a fallback. The APK
+  the rear camera via **ZXing** (`@zxing/browser`, `BrowserQRCodeReader.decodeFromConstraints` with continuous
+  autofocus) — a robust continuous-decode loop that stays smooth while the camera moves toward the code — and
+  decodes Studio's **left** pairing QR straight into `parseUrl` → connect. No URL typing, no registration. Pasting a URL still works as a fallback. The APK
   declares `CAMERA` (see `AndroidManifest.xml`) and requests it on launch (`MainActivity`) so the WebView
   camera is grantable.
 - **Connection history & reconnect.** Endpoints are remembered as a list (`web/src/config.ts`,
