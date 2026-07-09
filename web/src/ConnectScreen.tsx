@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Endpoint } from "./types";
 import { parseUrl } from "./config";
+import { QrScanner } from "./QrScanner";
 
 interface Props {
   initial: Endpoint | null;
@@ -17,6 +18,7 @@ export function ConnectScreen({ initial, onConnect }: Props) {
   const [token, setToken] = useState(initial?.token ?? "");
   const [secure, setSecure] = useState(initial?.secure ?? false);
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   const applyPaste = (text: string) => {
     const ep = parseUrl(text);
@@ -29,6 +31,17 @@ export function ConnectScreen({ initial, onConnect }: Props) {
     }
   };
 
+  // A scanned QR is just a pairing URL — parse it and connect straight away (same path as paste).
+  const onScan = (text: string) => {
+    setScanning(false);
+    const ep = parseUrl(text);
+    if (ep && ep.token) {
+      onConnect(ep);
+    } else {
+      setError("That QR isn’t a BotPilot link. Scan the LEFT QR in Studio’s Remote Pilot dialog.");
+    }
+  };
+
   const submit = () => {
     const p = Number(port);
     if (!host || !p || !token) {
@@ -38,12 +51,20 @@ export function ConnectScreen({ initial, onConnect }: Props) {
     onConnect({ host, port: p, token, secure });
   };
 
+  if (scanning) {
+    return <QrScanner onResult={onScan} onCancel={() => setScanning(false)} />;
+  }
+
   return (
     <div className="connect">
       <h1>BotPilot</h1>
-      <p className="muted">Connect to BotMaker Studio (Enable Remote Pilot → copy the URL).</p>
+      <p className="muted">
+        In BotMaker Studio open <b>Remote Pilot</b>, then scan the QR — nothing to install or register.
+      </p>
 
-      <label>Paste URL</label>
+      <button className="scan" onClick={() => setScanning(true)}>📷 Scan QR</button>
+
+      <label>Or paste URL</label>
       <input
         placeholder="http://100.x.x.x:12345/?token=…"
         onChange={(e) => applyPaste(e.target.value)}

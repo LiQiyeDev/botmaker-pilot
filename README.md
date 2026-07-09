@@ -22,6 +22,18 @@ botmaker-pilot/
 The same `web/` build is served two ways: directly by Studio for browsers, and bundled into the APK by
 Capacitor for a native mobile app.
 
+### Pairing & updates
+
+- **Pairing by QR scan.** The connect screen has a **📷 Scan QR** button (`web/src/QrScanner.tsx`): it opens
+  the rear camera (`getUserMedia`, native `BarcodeDetector` with a `jsqr` fallback) and decodes Studio's
+  **left** pairing QR straight into `parseUrl` → connect. No URL typing, no registration. Pasting a URL still
+  works as a fallback. The APK declares `CAMERA` (see `AndroidManifest.xml`) and requests it on launch
+  (`MainActivity`) so the WebView camera is grantable.
+- **In-app auto-update.** On launch the app best-effort checks the latest GitHub release
+  (`web/src/useAppUpdate.ts`, throttled) and, if newer than the built-in `__APP_VERSION__` (injected from
+  `web/package.json`), shows an **Update available** banner linking to the stable
+  `releases/latest/download/botpilot.apk`. Keep `web/package.json`'s `version` in step with the release tags.
+
 ## Building
 
 ```bash
