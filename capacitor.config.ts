@@ -2,12 +2,14 @@ import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
  * BotPilot Android shell. The web client (web/dist) is bundled into the APK and loaded from the
- * local `https://localhost` WebView origin; the app then connects out to BotMaker Studio's
- * PilotServer over a plain WebSocket across the Tailscale tunnel.
+ * local `https://localhost` WebView origin.
  *
- * `androidScheme: "https"` keeps the bundled app on a secure origin (so localStorage etc. behave),
- * while `cleartext: true` permits the outbound ws:// connection — the Tailscale tunnel, not TLS,
- * provides the transport encryption on the LAN-like tailnet.
+ * Primary path: the app connects to Studio's Tailscale Funnel URL over `wss://` (real TLS on a
+ * public `*.ts.net` host) — no cleartext needed there.
+ *
+ * `androidScheme: "https"` keeps the bundled app on a secure origin (so localStorage etc. behave).
+ * `cleartext: true` / `allowMixedContent` are kept ONLY so the same APK can still reach a plain
+ * `ws://` PilotServer on a LAN/tailnet IP for local development; they are not used by the Funnel path.
  */
 const config: CapacitorConfig = {
   appId: "dev.liqiye.botpilot",

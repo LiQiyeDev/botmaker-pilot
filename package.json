@@ -6,7 +6,8 @@
   "scripts": {
     "build:web": "npm --prefix web ci && npm --prefix web run build",
     "sync": "cap sync android",
-    "apk": "cd android && ./gradlew assembleDebug"
+    "apk": "cd android && ./gradlew assembleDebug",
+    "dist": "npm run build:web && npx cap sync android && npm run apk"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

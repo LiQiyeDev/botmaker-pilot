@@ -1,0 +1,50 @@
+# Builds the BotPilot Android APK on every version tag and attaches it to the GitHub Release as
+# `botpilot.apk`. Studio's Remote Pilot dialog shows a QR code pointing at the stable permalink
+# https://github.com/LiQiyeDev/botmaker-pilot/releases/latest/download/botpilot.apk, which always
+# resolves to the newest release's asset — so the phone can scan-and-install the latest build fast.
+#
+# Cut a release:  git tag v0.1.0 && git push origin v0.1.0
+name: Release APK
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create/update the GitHub Release and upload the APK asset
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build web + sync + assemble APK
+        run: |
+          npm ci
+          npm run build:web
+          npx cap sync android
+          cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Stage APK as botpilot.apk
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk botpilot.apk
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: botpilot.apk

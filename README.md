@@ -1,8 +1,8 @@
 # BotPilot
 
 Remote companion client for **BotMaker Studio**. It shows a live preview of the running bot and can
-start / stop / pause / resume it, from a browser or an installable Android app, over a private
-[Tailscale](https://tailscale.com) tunnel.
+start / stop / pause / resume it, from a browser or an installable Android app — from anywhere, over
+real HTTPS via [Tailscale](https://tailscale.com) Funnel (with a plain-`ws://` tailnet/LAN fallback).
 
 BotPilot is the client half; the server half lives in **BotMaker Studio** (`services/pilot/PilotServer`),
 which serves this UI over HTTP and speaks a WebSocket protocol carrying:
@@ -31,18 +31,56 @@ cd web && npm ci && npm run build      # → web/dist
 
 # Android APK (from the pilot root)
 npm ci                                 # Capacitor CLI + native deps
-npm run build:web                      # produces web/dist
-npx cap sync android                   # copy dist into the native project
-cd android && ./gradlew assembleDebug  # → android/app/build/outputs/apk/debug/app-debug.apk
+npm run dist                           # web build → cap sync → assembleDebug, in one step
+#   → android/app/build/outputs/apk/debug/app-debug.apk
+#   (granular steps: npm run build:web / npx cap sync android / npm run apk)
 ```
 
 Studio serves the web UI itself: a prebuilt `dist` is committed under
 `botmaker-studio/src/main/resources/pilot/`, and `mvn -Ppilot package` in Studio rebuilds it from this
 `web/` source (downloading a project-local Node — nothing installed system-wide).
 
-The APK bundles `web/dist` locally and loads it from the `https://localhost` WebView origin, then connects
-out to Studio's `PilotServer` over a plain `ws://` across the Tailscale tunnel (the tunnel, not TLS,
-encrypts the transport — hence `server.cleartext` in `capacitor.config.ts`).
+The APK bundles `web/dist` locally and loads it from the `https://localhost` WebView origin. On the primary
+(Funnel) path it connects out to Studio over `wss://` — real TLS on a public `*.ts.net` host. `server.cleartext`
+in `capacitor.config.ts` is kept only so the same APK can also reach a plain `ws://` PilotServer on a LAN/tailnet
+IP for local development.
+
+## Remote access over HTTPS (Tailscale Funnel)
+
+To reach the bot from anywhere over **real, browser-trusted HTTPS**, Studio (**View ▸ Enable Remote Pilot…**)
+asks the local `tailscale` daemon to expose its loopback pilot port publicly as
+`https://<machine>.<tailnet>.ts.net`. The phone then just opens that URL in **any browser — no Tailscale, no
+VPN** — or installs the APK and pairs with it. The dialog shows a QR to scan.
+
+One-time machine/admin setup (the phone needs nothing):
+
+1. Install Tailscale on the Studio machine and log in.
+2. Enable **HTTPS certificates** for the tailnet (Tailscale admin ▸ DNS).
+3. Grant the **`funnel`** node-attribute in the tailnet ACL policy, e.g.:
+   ```jsonc
+   "nodeAttrs": [{ "target": ["autogroup:member"], "attr": ["funnel"] }]
+   ```
+4. Let your user manage Funnel without root (Studio runs as you, not root) — once:
+   ```bash
+   sudo tailscale set --operator=$USER
+   ```
+
+If Funnel isn't available/enabled, Studio surfaces the reason (including Tailscale's own "run `sudo tailscale
+set --operator=$USER`" hint when that's the cause) and falls back to a direct bind — the Tailscale `100.x` IP
+if the tunnel is up, else all interfaces with a warning — over plain `http://`/`ws://`.
+
+## Releasing the APK (fast phone install)
+
+Pushing a version tag builds the APK in CI and attaches it to a GitHub Release as `botpilot.apk`
+(`.github/workflows/release-apk.yml`):
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Studio's Remote Pilot dialog shows an "install app" QR pointing at the stable permalink
+`https://github.com/LiQiyeDev/botmaker-pilot/releases/latest/download/botpilot.apk`, which always resolves to
+the newest release — scan it on the phone to download and install the latest build.
 
 ## Protocol (WebSocket `/ws?token=…`)
 
