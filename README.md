@@ -126,9 +126,13 @@ the server enforces, not the client:
   Funnel URL isn't a remote desktop.
 - **Coordinates are absolute screen px**, derived client-side by inverting the canvas letterbox transform —
   and clamped server-side to the rect of the frame the client was actually last shown.
-- **A tap is a `tap`**, not `down`+`up`. Only that path is cursor-preserving (`PostMessage` on Windows,
-  `XSendEvent` on X11); drags need pointer state and fall back to `move`/`button`, which on some Linux
-  backends moves the host's real cursor. `backgroundInput` in the state message says which you're getting.
+- **A tap is a `tap`**, not `down`+`up`. Only that path has a direct-to-window form (`PostMessage` on
+  Windows); drags need pointer state and fall back to `move`/`button`, which drives the real pointer.
+- **On Linux the host escalates its input backend the first time Interact is used.** The cursor-preserving
+  default (`XSendEvent`) flags its events `send_event=True`, and every Wine/Proton game ignores those — taps
+  landed nowhere. Studio now asks for uinput (else XTest) on first use, so the click actually lands at the
+  cost of moving the host's real cursor. `backgroundInput` in the state message says which you're getting,
+  and the client's "moves the computer's real cursor" warning is what surfaces it.
 
 ## Status
 
