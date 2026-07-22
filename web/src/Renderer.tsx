@@ -1,18 +1,39 @@
 import { useEffect, useRef } from "react";
-import type { Frame, Rect, TelemetryEvent } from "./types";
+import type { Frame, Rect, TelemetryEvent, ViewTransform } from "./types";
 
 const OVERLAY_TTL_MS = 1200;
 
 interface Props {
   frameRef: React.MutableRefObject<Frame | null>;
   overlaysRef: React.MutableRefObject<TelemetryEvent[]>;
+  /**
+   * Filled with the letterbox transform of every drawn frame. Interact inverts it to turn a touch into an
+   * absolute screen coordinate — it must come from here, since only the draw loop knows the fit actually
+   * used, and a stale or re-derived transform would land clicks in the wrong place.
+   */
+  transformRef?: React.MutableRefObject<ViewTransform | null>;
+  /** Armed Interact: shows the crosshair + live border so it is obvious touches now reach the game. */
+  interactive?: boolean;
+  onPointerDown?: (e: React.PointerEvent<HTMLCanvasElement>) => void;
+  onPointerMove?: (e: React.PointerEvent<HTMLCanvasElement>) => void;
+  onPointerUp?: (e: React.PointerEvent<HTMLCanvasElement>) => void;
+  onWheel?: (e: React.WheelEvent<HTMLCanvasElement>) => void;
 }
 
 /**
  * Draws the latest frame (letterboxed to fit) and the fading telemetry overlays on a canvas, on its own
  * requestAnimationFrame loop reading the refs — decoupled from React renders so streaming video stays smooth.
  */
-export function Renderer({ frameRef, overlaysRef }: Props) {
+export function Renderer({
+  frameRef,
+  overlaysRef,
+  transformRef,
+  interactive = false,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onWheel,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -32,12 +53,16 @@ export function Renderer({ frameRef, overlaysRef }: Props) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const frame = frameRef.current;
-      if (!frame) return;
+      if (!frame) {
+        if (transformRef) transformRef.current = null;
+        return;
+      }
 
       const s = Math.min(canvas.width / frame.sw, canvas.height / frame.sh);
       const dw = frame.sw * s, dh = frame.sh * s;
       const ox = (canvas.width - dw) / 2, oy = (canvas.height - dh) / 2;
       ctx.drawImage(frame.bitmap, ox, oy, dw, dh);
+      if (transformRef) transformRef.current = { ox, oy, s, sx: frame.sx, sy: frame.sy };
 
       const now = Date.now();
       const live = overlaysRef.current.filter((o) => (o._exp ?? 0) > now);
@@ -72,9 +97,21 @@ export function Renderer({ frameRef, overlaysRef }: Props) {
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [frameRef, overlaysRef]);
+  }, [frameRef, overlaysRef, transformRef]);
 
-  return <canvas ref={canvasRef} className="stage-canvas" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      className={`stage-canvas${interactive ? " interactive" : ""}`}
+      // touch-action is what stops the browser from swallowing a drag as a scroll/pinch gesture.
+      style={interactive ? { touchAction: "none" } : undefined}
+      onPointerDown={interactive ? onPointerDown : undefined}
+      onPointerMove={interactive ? onPointerMove : undefined}
+      onPointerUp={interactive ? onPointerUp : undefined}
+      onPointerCancel={interactive ? onPointerUp : undefined}
+      onWheel={interactive ? onWheel : undefined}
+    />
+  );
 }
 
 function strokeRect(

@@ -1,1 +1,1 @@
-{"root":["./src/App.tsx","./src/ConnectScreen.tsx","./src/QrScanner.tsx","./src/Renderer.tsx","./src/config.ts","./src/main.tsx","./src/types.ts","./src/useAppUpdate.ts","./src/usePilot.ts"],"version":"5.9.3"}
+{"root":["./src/App.tsx","./src/ConnectScreen.tsx","./src/QrScanner.tsx","./src/Renderer.tsx","./src/config.ts","./src/main.tsx","./src/types.ts","./src/useAppUpdate.ts","./src/useInteract.ts","./src/usePilot.ts"],"version":"5.9.3"}

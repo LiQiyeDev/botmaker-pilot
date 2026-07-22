@@ -112,8 +112,23 @@ the newest release — scan it on the phone to download and install the latest b
 | Direction | Type | Payload |
 |-----------|------|---------|
 | server → client | binary | `[16-byte header: sx,sy,sw,sh as int32 BE][JPEG bytes]` |
-| server → client | text | `{"type":"telemetry", …}` / `{"type":"state","run":"running\|stopped\|paused"}` |
+| server → client | text | `{"type":"telemetry", …}` / `{"type":"state","run":"running\|stopped\|paused","backgroundInput":true}` |
 | client → server | text | `{"cmd":"start\|stop\|pause\|resume"}` |
+| client → server | text | `{"cmd":"interact","on":true}` — arm/disarm manual Interact |
+| client → server | text | `{"cmd":"input","kind":"tap\|down\|move\|up\|scroll","x":…,"y":…,"button":1,"amount":-1}` |
+
+### Interact
+
+With Interact armed, touches on the video are replayed on the Studio host as real mouse input. Three rules
+the server enforces, not the client:
+
+- **Armed per connection, disarmed by default.** A viewer that never asked can't poke the game, and a leaked
+  Funnel URL isn't a remote desktop.
+- **Coordinates are absolute screen px**, derived client-side by inverting the canvas letterbox transform —
+  and clamped server-side to the rect of the frame the client was actually last shown.
+- **A tap is a `tap`**, not `down`+`up`. Only that path is cursor-preserving (`PostMessage` on Windows,
+  `XSendEvent` on X11); drags need pointer state and fall back to `move`/`button`, which on some Linux
+  backends moves the host's real cursor. `backgroundInput` in the state message says which you're getting.
 
 ## Status
 

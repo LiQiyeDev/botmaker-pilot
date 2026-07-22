@@ -16,6 +16,8 @@ function wsUrl(ep: Endpoint): string {
 export function usePilot(endpoint: Endpoint | null) {
   const [status, setStatus] = useState<ConnStatus>("closed");
   const [runState, setRunState] = useState<RunState>("stopped");
+  // Whether the host can synthesize input without hijacking its real cursor (see PilotInputService).
+  const [backgroundInput, setBackgroundInput] = useState(true);
 
   const frameRef = useRef<Frame | null>(null);
   const overlaysRef = useRef<TelemetryEvent[]>([]);
@@ -25,7 +27,7 @@ export function usePilot(endpoint: Endpoint | null) {
 
   const send = useCallback((cmd: ControlCmd) => {
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ cmd }));
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(cmd));
   }, []);
 
   useEffect(() => {
@@ -61,13 +63,16 @@ export function usePilot(endpoint: Endpoint | null) {
     };
 
     const handleText = (text: string) => {
-      let msg: { type?: string; run?: RunState; event?: TelemetryEvent };
+      let msg: { type?: string; run?: RunState; backgroundInput?: boolean; event?: TelemetryEvent };
       try {
         msg = JSON.parse(text);
       } catch {
         return;
       }
-      if (msg.type === "state" && msg.run) setRunState(msg.run);
+      if (msg.type === "state") {
+        if (msg.run) setRunState(msg.run);
+        if (typeof msg.backgroundInput === "boolean") setBackgroundInput(msg.backgroundInput);
+      }
       else if (msg.type === "telemetry" && msg.event) {
         const e = msg.event;
         e._exp = Date.now() + OVERLAY_TTL_MS;
@@ -102,5 +107,5 @@ export function usePilot(endpoint: Endpoint | null) {
     };
   }, [endpoint]);
 
-  return { status, runState, frameRef, overlaysRef, send };
+  return { status, runState, backgroundInput, frameRef, overlaysRef, send };
 }

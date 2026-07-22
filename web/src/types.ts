@@ -42,9 +42,43 @@ export interface Frame {
   sh: number;
 }
 
-export type ControlCmd = "start" | "stop" | "pause" | "resume";
+/** One manual Interact gesture step. Coordinates are absolute screen px on the Studio host. */
+export interface InputCmd {
+  cmd: "input";
+  kind: "tap" | "down" | "move" | "up" | "scroll";
+  x: number;
+  y: number;
+  button?: number;
+  amount?: number;
+}
+
+/**
+ * Anything the client can send. Run control and the Interact arm/disarm are simple flag commands; gestures
+ * carry coordinates. Interact starts disarmed on every new connection — the server enforces that too, so a
+ * passive viewer can never poke the game.
+ */
+export type ControlCmd =
+  | { cmd: "start" | "stop" | "pause" | "resume" }
+  | { cmd: "interact"; on: boolean }
+  | InputCmd;
 
 export type ConnStatus = "connecting" | "connected" | "reconnecting" | "closed";
+
+/**
+ * The letterbox transform the canvas is currently drawing with. Inverting it is what turns a touch on the
+ * video into the absolute screen coordinate an Interact gesture needs, so the renderer publishes it rather
+ * than each consumer re-deriving the fit maths.
+ */
+export interface ViewTransform {
+  /** Canvas-space offset of the drawn image's top-left, in device pixels. */
+  ox: number;
+  oy: number;
+  /** Scale from surface px to canvas device px. */
+  s: number;
+  /** Absolute screen origin the drawn image's (0,0) maps to. */
+  sx: number;
+  sy: number;
+}
 
 /** Where to reach a Studio PilotServer. */
 export interface Endpoint {
