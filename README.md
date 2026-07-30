@@ -128,6 +128,11 @@ the server enforces, not the client:
   and clamped server-side to the rect of the frame the client was actually last shown.
 - **A tap is a `tap`**, not `down`+`up`. Only that path has a direct-to-window form (`PostMessage` on
   Windows); drags need pointer state and fall back to `move`/`button`, which drives the real pointer.
+- **A tap carries the coordinate of the `pointerdown`, not the `pointerup`.** Within-slop drift (up to
+  `DRAG_SLOP_PX` = 6 CSS px) still counts as a tap by design, but sending the lift position turned all of that
+  drift into aim error — and the slop is in *phone* CSS px, so a 1280 px frame shown ~400 px wide multiplied it
+  by ~3: ~19 px off target on a game that shows hover feedback for a near-miss. Drags still release where the
+  finger lifted, which is the whole point of a drag.
 - **On Linux the host escalates its input backend the first time Interact is used.** The cursor-preserving
   default (`XSendEvent`) flags its events `send_event=True`, and every Wine/Proton game ignores those — taps
   landed nowhere. Studio now asks for uinput (else XTest) on first use, so the click actually lands at the
