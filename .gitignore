@@ -17,3 +17,6 @@ android/local.properties
 android/.idea/
 *.apk
 *.keystore
+
+# TypeScript incremental-build cache — stale by construction.
+web/tsconfig.tsbuildinfo

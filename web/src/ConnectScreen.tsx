@@ -10,7 +10,6 @@ import { QrScanner } from "./QrScanner";
 import { useAppUpdate, LATEST_APK_URL } from "./useAppUpdate";
 
 interface Props {
-  initial: Endpoint | null;
   onConnect: (ep: Endpoint) => void;
 }
 
@@ -29,11 +28,11 @@ function ago(ts: number): string {
  * First-run / reconnect pairing screen (used by the APK, and by a browser opened without a token). Offers a
  * list of previously-used connections to reconnect without rescanning, a QR scan, or manual host/port/token.
  */
-export function ConnectScreen({ initial, onConnect }: Props) {
-  const [host, setHost] = useState(initial?.host ?? "");
-  const [port, setPort] = useState(initial?.port ? String(initial.port) : "");
-  const [token, setToken] = useState(initial?.token ?? "");
-  const [secure, setSecure] = useState(initial?.secure ?? false);
+export function ConnectScreen({ onConnect }: Props) {
+  const [host, setHost] = useState("");
+  const [port, setPort] = useState("");
+  const [token, setToken] = useState("");
+  const [secure, setSecure] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [recent, setRecent] = useState<SavedConnection[]>(() => loadConnections());

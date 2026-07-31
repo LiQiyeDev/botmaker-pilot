@@ -62,7 +62,7 @@ export function App() {
     return (
       <>
         {updateBanner}
-        <ConnectScreen initial={null} onConnect={connect} />
+        <ConnectScreen onConnect={connect} />
       </>
     );
   }
