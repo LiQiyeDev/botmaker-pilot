@@ -16,12 +16,12 @@ const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // auto-check throttle: at most on
 export type CheckResult = "idle" | "checking" | "uptodate" | "available" | "error";
 
 /** Parses "v1.2.3" / "1.2.3" into a numeric tuple; missing parts default to 0. */
-function parseVersion(v: string): number[] {
+export function parseVersion(v: string): number[] {
   return v.replace(/^[^\d]*/, "").split(/[.\-+]/).map((n) => Number(n) || 0);
 }
 
 /** True if `latest` is a strictly newer version than `current`. */
-function isNewer(latest: string, current: string): boolean {
+export function isNewer(latest: string, current: string): boolean {
   const a = parseVersion(latest);
   const b = parseVersion(current);
   for (let i = 0; i < Math.max(a.length, b.length); i++) {

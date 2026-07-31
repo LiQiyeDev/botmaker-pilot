@@ -33,3 +33,9 @@ jobs:
       - name: Typecheck and build
         working-directory: web
         run: npm run build
+
+      # Vitest, added by Phase 3's pilot block. The suite is pure functions plus jsdom — no device, no
+      # emulator, no network — so it belongs on the same push gate as the typecheck.
+      - name: Test
+        working-directory: web
+        run: npm test

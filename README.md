@@ -61,6 +61,19 @@ npm run dist                           # web build → cap sync → assembleDebu
 #   (granular steps: npm run build:web / npx cap sync android / npm run apk)
 ```
 
+### Tests
+
+```bash
+cd web && npm test                     # Vitest, jsdom — runs in ~2s, no device and no network
+#   watch loop: npm run test:watch
+```
+
+Four suites next to the code they cover, all on the push gate alongside the typecheck: `useInteract`
+(where a tap lands), `config` (what is stored on the device and migrated from older builds), `useAppUpdate`
+(whether a user is offered an update at all) and `usePilot` (the socket, the frame header and the bitmap
+lifecycle). Two `usePilot` tests are `.skip`ped with the bug they document — see `docs/refactor/bugs.md`
+in the umbrella repo.
+
 Studio serves the web UI itself: a prebuilt `dist` is committed under
 `botmaker-studio/src/main/resources/pilot/`, and `mvn -Ppilot package` in Studio rebuilds it from this
 `web/` source (downloading a project-local Node — nothing installed system-wide).
