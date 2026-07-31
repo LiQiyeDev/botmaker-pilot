@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { FakeSocket } from "./testSocket";
 import { usePilot } from "./usePilot";
 import type { Endpoint, TelemetryEvent } from "./types";
 
@@ -10,9 +11,10 @@ import type { Endpoint, TelemetryEvent } from "./types";
  * to a decode that is still in flight when the connection goes away. The last of those is B13, and it is
  * the reason this file exists before the fix rather than after it.
  *
- * Neither `WebSocket` nor `createImageBitmap` exists in jsdom, so both are stood up here as real objects
- * with a controllable clock — a socket whose events the test raises by hand, and a decoder whose promises
- * the test resolves in whatever order it wants. Nothing about the hook is mocked.
+ * Neither `WebSocket` nor `createImageBitmap` exists in jsdom, so both are stood up as real objects with a
+ * controllable clock — a socket whose events the test raises by hand (`./testSocket`, shared with
+ * `wire.test.ts`), and a decoder whose promises the test resolves in whatever order it wants. Nothing
+ * about the hook is mocked.
  */
 
 const ENDPOINT: Endpoint = { host: "192.168.1.9", port: 8080, token: "a b+c", secure: false };
@@ -23,45 +25,6 @@ class FakeBitmap {
   constructor(readonly id: number) {}
   close() {
     this.closed = true;
-  }
-}
-
-class FakeSocket {
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
-  static readonly CLOSING = 2;
-  static readonly CLOSED = 3;
-  static instances: FakeSocket[] = [];
-
-  readyState = FakeSocket.CONNECTING;
-  binaryType = "blob";
-  sent: string[] = [];
-  onopen: (() => void) | null = null;
-  onclose: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  onmessage: ((ev: { data: unknown }) => void) | null = null;
-
-  constructor(readonly url: string) {
-    FakeSocket.instances.push(this);
-  }
-
-  send(data: string) {
-    this.sent.push(data);
-  }
-
-  close() {
-    if (this.readyState === FakeSocket.CLOSED) return;
-    this.readyState = FakeSocket.CLOSED;
-    this.onclose?.();
-  }
-
-  /* Test-side drivers. */
-  open() {
-    this.readyState = FakeSocket.OPEN;
-    this.onopen?.();
-  }
-  deliver(data: unknown) {
-    this.onmessage?.({ data });
   }
 }
 

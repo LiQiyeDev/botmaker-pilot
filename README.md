@@ -68,11 +68,19 @@ cd web && npm test                     # Vitest, jsdom — runs in ~2s, no devic
 #   watch loop: npm run test:watch
 ```
 
-Four suites next to the code they cover, all on the push gate alongside the typecheck: `useInteract`
+Five suites next to the code they cover, all on the push gate alongside the typecheck: `useInteract`
 (where a tap lands), `config` (what is stored on the device and migrated from older builds), `useAppUpdate`
-(whether a user is offered an update at all) and `usePilot` (the socket, the frame header and the bitmap
-lifecycle). Two `usePilot` tests are `.skip`ped with the bug they document — see `docs/refactor/bugs.md`
-in the umbrella repo.
+(whether a user is offered an update at all), `usePilot` (the socket, the frame header and the bitmap
+lifecycle) and `wire` (below). Two `usePilot` tests are `.skip`ped with the bug they document — see
+`docs/refactor/bugs.md` in the umbrella repo.
+
+**The wire contract is checked from both ends.** `src/wire-golden.json` is a corpus of every message
+Studio can send, committed **byte-identically** here and in `botmaker-studio`
+(`src/test/resources/pilot/`). `wire.test.ts` feeds each one through the real `usePilot` and asserts what
+the client decodes; Studio's `TelemetryWireContractTest` asserts its serializer emits exactly those bytes.
+Neither test can see the other repo, so both assert the corpus' **SHA-256** — change the protocol on one
+side and the other side goes red until it is changed too. **Editing one copy means editing all four
+things: both files and both digest constants.**
 
 Studio serves the web UI itself: a prebuilt `dist` is committed under
 `botmaker-studio/src/main/resources/pilot/`, and `mvn -Ppilot package` in Studio rebuilds it from this
