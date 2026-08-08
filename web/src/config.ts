@@ -1,6 +1,7 @@
 import type { Endpoint } from "./types";
 
 const STORAGE_KEY = "botpilot.connections";
+const OVERLAYS_KEY = "botpilot.overlays";
 const LEGACY_KEY = "botpilot.endpoint"; // pre-history single-endpoint store, migrated on first load
 const MAX_CONNECTIONS = 8;
 
@@ -109,6 +110,28 @@ export function removeConnection(ep: Endpoint): SavedConnection[] {
   const list = loadConnections().filter((c) => endpointKey(c.endpoint) !== key);
   persist(list);
   return list;
+}
+
+/**
+ * Whether to draw the telemetry overlay layer. Defaults to **on**: the overlays are the only thing on the
+ * stream that says what the bot is looking at, so a user who has never heard of the setting should see them.
+ * Only an explicit "off" turns it off — a storage read that fails, or a value from some future version, is
+ * not a reason to hide them.
+ */
+export function loadOverlaysEnabled(): boolean {
+  try {
+    return localStorage.getItem(OVERLAYS_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function saveOverlaysEnabled(on: boolean): void {
+  try {
+    localStorage.setItem(OVERLAYS_KEY, on ? "on" : "off");
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Parses a pasted/scanned URL like {@code http://100.64.0.1:12345/?token=abc} into an Endpoint, if valid. */

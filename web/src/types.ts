@@ -20,7 +20,7 @@ export interface Target {
 /** A decoded telemetry event (the body of a {"type":"telemetry","event":…} message). */
 export interface TelemetryEvent {
   ts: number;
-  kind: "Match" | "Click" | "Region";
+  kind: "Match" | "Click" | "Region" | "Swipe";
   target: Target | null;
   found?: boolean;
   confidence?: number;
@@ -29,6 +29,12 @@ export interface TelemetryEvent {
   x?: number;
   y?: number;
   button?: number;
+  /** Swipe: both ends of the gesture, absolute, and how long it was asked to take. */
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  duration?: number;
   /** Client-side expiry stamp for fading overlays; not on the wire. */
   _exp?: number;
 }

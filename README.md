@@ -156,6 +156,17 @@ the newest release — scan it on the phone to download and install the latest b
 | client → server | text | `{"cmd":"interact","on":true}` — arm/disarm manual Interact |
 | client → server | text | `{"cmd":"input","kind":"tap\|down\|move\|up\|scroll","x":…,"y":…,"button":1,"amount":-1}` |
 
+### Overlays
+
+The telemetry the bot sends is drawn over the stream: the search region and the match rect (green found, red
+missed), a ring where a click landed, and an arrow along a swipe — each fading out over ~1.2s. Tap the stage
+and use **◎ Overlays** to turn the layer off; the choice is remembered in `localStorage` (`botpilot.overlays`)
+and defaults to on. Turning it off does not stop the events arriving — they still expire on schedule, so
+turning it back on shows what the bot is doing now rather than a backlog.
+
+Overlays only exist for a bot **Studio launched** (the SDK ships them only when `BM_IPC_PORT` is set), so a
+bot started by hand streams pixels and draws nothing.
+
 ### Interact
 
 With Interact armed, touches on the video are replayed on the Studio host as real mouse input. Three rules

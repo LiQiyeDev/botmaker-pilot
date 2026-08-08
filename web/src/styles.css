@@ -89,7 +89,8 @@ header .link {
   align-items: center;
   gap: 8px;
 }
-.stage-tools .interact {
+.stage-tools .interact,
+.stage-tools .overlays {
   padding: 8px 14px;
   font-size: 13px;
   border-radius: 999px;
@@ -104,6 +105,8 @@ header .link {
   color: #fff;
 }
 .stage-tools .interact:disabled { opacity: 0.4; cursor: default; }
+/* On is the default and the quiet state; off is the one worth showing, so it's the dimmed one. */
+.stage-tools .overlays:not(.on) { opacity: 0.55; }
 .stage-tools .interact-warn {
   padding: 6px 10px;
   border-radius: 8px;

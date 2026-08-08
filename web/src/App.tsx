@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { Endpoint, ViewTransform } from "./types";
-import { initialEndpoint, upsertConnection, touchConnection } from "./config";
+import {
+  initialEndpoint,
+  upsertConnection,
+  touchConnection,
+  loadOverlaysEnabled,
+  saveOverlaysEnabled,
+} from "./config";
 import { usePilot } from "./usePilot";
 import { Renderer } from "./Renderer";
 import { ConnectScreen } from "./ConnectScreen";
@@ -17,6 +23,9 @@ export function App() {
   // the connection drops — an armed session must not silently survive a reconnect to a different endpoint.
   const [controlsShown, setControlsShown] = useState(false);
   const [interact, setInteract] = useState(false);
+  // Unlike Interact, this one is remembered: it is a viewing preference, not a capability that would be
+  // dangerous to have silently survive a reconnect.
+  const [overlays, setOverlays] = useState(loadOverlaysEnabled);
   const transformRef = useRef<ViewTransform | null>(null);
   const gestures = useInteract(send, transformRef, interact);
 
@@ -83,6 +92,7 @@ export function App() {
           overlaysRef={overlaysRef}
           transformRef={transformRef}
           interactive={interact}
+          overlays={overlays}
           {...gestures}
         />
         {controlsShown && (
@@ -93,6 +103,16 @@ export function App() {
               disabled={status !== "connected"}
             >
               {interact ? "✋ Interacting" : "✋ Interact"}
+            </button>
+            <button
+              className={`overlays${overlays ? " on" : ""}`}
+              onClick={() => {
+                const next = !overlays;
+                setOverlays(next);
+                saveOverlaysEnabled(next);
+              }}
+            >
+              {overlays ? "◎ Overlays" : "◎ Overlays off"}
             </button>
             {interact && !backgroundInput && (
               <span className="interact-warn">moves the computer’s real cursor</span>

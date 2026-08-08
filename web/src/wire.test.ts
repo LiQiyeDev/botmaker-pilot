@@ -26,7 +26,7 @@ import type { Endpoint, TelemetryEvent } from "./types";
 const GOLDEN_PATH = join(process.cwd(), "src", "wire-golden.json");
 
 /** Update together with `GOLDEN_SHA256` in the Studio repo's `TelemetryWireContractTest`. */
-const GOLDEN_SHA256 = "6ae62fe097feae4e3e9dd2cc7c3b5837be80d6b9d2369f740942b3c2ccb117c3";
+const GOLDEN_SHA256 = "c12e8c813f6de5088718103b3af6c4620963c1ae45adb46f36dd226aaf1675a7";
 
 const CORPUS = JSON.parse(readFileSync(GOLDEN_PATH, "utf8")) as Record<string, Record<string, unknown>>;
 
@@ -43,13 +43,17 @@ const covered = new Set<string>();
  * about: TypeScript erases at runtime, so nothing else in this repo would notice a field arriving that no
  * interface names, or an interface naming a field that stopped arriving.
  */
-const DECLARED_KEYS = ["ts", "kind", "target", "found", "confidence", "region", "rect", "x", "y", "button"];
+const DECLARED_KEYS = [
+  "ts", "kind", "target", "found", "confidence", "region", "rect", "x", "y", "button",
+  "x1", "y1", "x2", "y2", "duration",
+];
 
 /** …and which of them each kind is expected to carry, exactly. */
 const KEYS_BY_KIND: Record<TelemetryEvent["kind"], string[]> = {
   Match: ["ts", "target", "kind", "found", "confidence", "region", "rect"],
   Click: ["ts", "target", "kind", "x", "y", "button"],
   Region: ["ts", "target", "kind", "rect"],
+  Swipe: ["ts", "target", "kind", "x1", "y1", "x2", "y2", "duration"],
 };
 
 const TARGET_KEYS = ["title", "x", "y", "w", "h"];
@@ -194,6 +198,17 @@ describe("what the client makes of a telemetry message", () => {
     expect(e.kind).toBe("Click");
     expect([e.x, e.y]).toEqual([300, 220]);
     expect(e.button).toBe(3);
+  });
+
+  test("a swipe arrives as one event with both ends, which is what the arrow needs", () => {
+    const e = overlay("telemetry.swipe");
+    expect(e.kind).toBe("Swipe");
+    // Absolute screen px, like every other coordinate on this wire — the renderer maps all four through
+    // the same letterbox transform, so a downscaled stream still draws the arrow across the right pixels.
+    expect([e.x1, e.y1, e.x2, e.y2]).toEqual([200, 400, 200, 120]);
+    // Not the fade time: the fade is the client's own TTL. This is how long the gesture itself took, which
+    // is the only thing distinguishing a flick from a slow drag once both ends are known.
+    expect(e.duration).toBe(450);
   });
 
   test("a region highlight carries a rect and no found flag, so it draws yellow", () => {
