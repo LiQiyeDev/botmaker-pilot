@@ -10,8 +10,26 @@ bind is the last-resort fallback.
 BotPilot is the client half; the server half lives in **BotMaker Studio** (`services/pilot/PilotServer`),
 which serves this UI over HTTP and speaks a WebSocket protocol carrying:
 
-- **binary** frames — JPEG bytes of the bot's target surface (loss-tolerant, ~10–30 FPS)
+- **binary** frames — the bot's target surface, in one of two formats (loss-tolerant, ~24 FPS)
 - **text** messages — telemetry events (JSON) server→client, and control commands (JSON) client→server
+
+### Two frame formats, one negotiated
+
+**JPEG is the floor**: a 16-byte header (`sx,sy,sw,sh`, big-endian int32) then the bytes, decoded with
+`createImageBitmap`. It needs no negotiation and is what every client got before there was anything to
+negotiate.
+
+**H.264** is offered only if this client asks for it — `{"cmd":"hello","accept":["h264"]}` on connect — and
+only when Studio has a private session it can encode. Studio then sends `{"type":"video","codec":…,"sx":…}`
+and every binary message after it is one tagged H.264 access unit, decoded with a WebCodecs `VideoDecoder`.
+The surface rect is on the announcement rather than on each frame, since one encoder on one display means it
+changes only when the stream does.
+
+Both end in the same `frameRef` holding something `drawImage` takes and `.close()` releases, so the renderer,
+the letterbox fit and the Interact coordinate mapping are identical either way. Every way the video path can
+fail — no `VideoDecoder`, a `configure` that throws, a decoder that errors mid-stream — re-sends `hello` with
+an empty `accept`, and Studio resumes JPEG. A client that never says hello is a JPEG client, which is why no
+version number appears anywhere in this.
 
 ## Layout
 

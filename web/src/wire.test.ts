@@ -26,7 +26,7 @@ import type { Endpoint, TelemetryEvent } from "./types";
 const GOLDEN_PATH = join(process.cwd(), "src", "wire-golden.json");
 
 /** Update together with `GOLDEN_SHA256` in the Studio repo's `TelemetryWireContractTest`. */
-const GOLDEN_SHA256 = "823d631b3ebc58d2dcc6aaba6f3951552bacc829d081ff997235d959e8e954cc";
+const GOLDEN_SHA256 = "6ae62fe097feae4e3e9dd2cc7c3b5837be80d6b9d2369f740942b3c2ccb117c3";
 
 const CORPUS = JSON.parse(readFileSync(GOLDEN_PATH, "utf8")) as Record<string, Record<string, unknown>>;
 
@@ -243,6 +243,64 @@ describe("what the client makes of a state message", () => {
   test("stopped", () => {
     const api = deliver("state.stopped.background");
     expect(api.runState).toBe("stopped");
+  });
+
+  test("a reason rides along with the state and does not disturb it", () => {
+    // Studio sends this when the stream has had nothing to show for a couple of seconds, so a blank canvas
+    // says why. The client does not render it yet; what is pinned here is that the extra key is harmless —
+    // a state message it cannot fully use must still drive the run state.
+    const api = deliver("state.stopped.reason");
+    expect(api.runState).toBe("stopped");
+    expect(CORPUS["state.stopped.reason"].reason).toBeTypeOf("string");
+  });
+});
+
+/**
+ * The video announcements. These are the only corpus messages that make the client *build* something, so
+ * WebCodecs has to exist for them — jsdom has none, and a runtime without it is a JPEG client that would
+ * never be sent these at all.
+ */
+describe("what the client makes of a video message", () => {
+  class StubVideoDecoder {
+    static last: StubVideoDecoder | null = null;
+    configured: { codec: string } | null = null;
+    closed = false;
+    constructor(readonly init: { output: (f: unknown) => void; error: (e: unknown) => void }) {
+      StubVideoDecoder.last = this;
+    }
+    configure(config: { codec: string }) {
+      this.configured = config;
+    }
+    decode() {}
+    close() {
+      this.closed = true;
+    }
+  }
+
+  beforeEach(() => {
+    StubVideoDecoder.last = null;
+    vi.stubGlobal("VideoDecoder", StubVideoDecoder);
+  });
+
+  test("a started stream configures a decoder for the codec Studio named", () => {
+    deliver("video.started");
+    expect(StubVideoDecoder.last?.configured?.codec).toBe(CORPUS["video.started"].codec);
+  });
+
+  test("the surface rect is on the announcement, because it is not on the frames", () => {
+    // The JPEG path repeats sx/sy/sw/sh in a 16-byte header on every frame; the video path sends them once.
+    // If this key set ever shrinks, the client has nothing left to map a tap through.
+    expect(Object.keys(CORPUS["video.started"]).sort())
+      .toEqual(["codec", "sh", "sw", "sx", "sy", "type"]);
+  });
+
+  test("a stop message builds no decoder and is not mistaken for a codec", () => {
+    deliver("video.stopped");
+    // `deliver` mounts a fresh client per case, so this cannot say anything about tearing a *running*
+    // stream down — `usePilot.test.ts` owns that. What it pins is the shape: the stop message is the same
+    // `video` type with a null codec, and a client reading it as a codec name would configure a decoder.
+    expect(CORPUS["video.stopped"].codec).toBeNull();
+    expect(StubVideoDecoder.last).toBeNull();
   });
 });
 

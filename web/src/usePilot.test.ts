@@ -193,7 +193,9 @@ describe("sending", () => {
     const h = harness();
     act(() => h.socket().open());
     act(() => h.api().send({ cmd: "start" }));
-    expect(h.socket().sent).toEqual(['{"cmd":"start"}']);
+    // The hello is always first: it is what tells Studio which frame format to send, so it has to land
+    // before any frame does. jsdom has no VideoDecoder, hence the empty accept — that is the JPEG client.
+    expect(h.socket().sent).toEqual(['{"cmd":"hello","accept":[]}', '{"cmd":"start"}']);
     h.unmount();
   });
 
@@ -359,4 +361,175 @@ describe("binary frames", () => {
       h.unmount();
     },
   );
+});
+
+/**
+ * The H.264 path. WebCodecs does not exist in jsdom either, so `VideoDecoder` and `EncodedVideoChunk` are
+ * stood up the same way the JPEG decoder is: real objects the test drives, nothing mocked. What is worth
+ * pinning here is not that decoding works — the browser's decoder does that — but the negotiation and the
+ * three ways it hands back to JPEG, because each of those failing silently is a phone showing a frozen
+ * canvas with nothing to say why.
+ */
+describe("the H.264 stream", () => {
+  class FakeVideoFrame {
+    closed = false;
+    close() {
+      this.closed = true;
+    }
+  }
+
+  class FakeVideoDecoder {
+    static instances: FakeVideoDecoder[] = [];
+    /** Set to make `configure` throw — a runtime that has the API but cannot decode the profile. */
+    static refuseConfigure = false;
+    configured: { codec: string; optimizeForLatency?: boolean } | null = null;
+    chunks: { type: string; data: Uint8Array }[] = [];
+    closed = false;
+
+    constructor(readonly init: { output: (f: FakeVideoFrame) => void; error: (e: unknown) => void }) {
+      FakeVideoDecoder.instances.push(this);
+    }
+    configure(config: { codec: string; optimizeForLatency?: boolean }) {
+      if (FakeVideoDecoder.refuseConfigure) throw new Error("unsupported codec");
+      this.configured = config;
+    }
+    decode(chunk: { type: string; data: Uint8Array }) {
+      this.chunks.push(chunk);
+    }
+    close() {
+      this.closed = true;
+    }
+    /** Test-side driver: hand a decoded picture back the way a real decoder would. */
+    emit(): FakeVideoFrame {
+      const f = new FakeVideoFrame();
+      this.init.output(f);
+      return f;
+    }
+  }
+
+  /** One tagged access unit, as `PilotServer.onVideoPacket` writes it. */
+  function unit(key: boolean, bytes: number[] = [9, 9, 9]): ArrayBuffer {
+    const buf = new ArrayBuffer(1 + bytes.length);
+    const view = new Uint8Array(buf);
+    view[0] = key ? 3 : 2;
+    view.set(bytes, 1);
+    return buf;
+  }
+
+  const START = JSON.stringify({ type: "video", codec: "avc1.42E01E", sx: 0, sy: 0, sw: 1920, sh: 1080 });
+
+  beforeEach(() => {
+    FakeVideoDecoder.instances = [];
+    FakeVideoDecoder.refuseConfigure = false;
+    vi.stubGlobal("VideoDecoder", FakeVideoDecoder);
+    vi.stubGlobal("EncodedVideoChunk", class {
+      type: string;
+      timestamp: number;
+      data: Uint8Array;
+      constructor(init: { type: string; timestamp: number; data: Uint8Array }) {
+        this.type = init.type;
+        this.timestamp = init.timestamp;
+        this.data = init.data;
+      }
+    });
+  });
+
+  /** Opens a socket that has announced a stream, and returns the decoder it built. */
+  function streaming(): { h: Harness; dec: FakeVideoDecoder } {
+    const h = harness();
+    act(() => h.socket().open());
+    act(() => h.socket().deliver(START));
+    return { h, dec: FakeVideoDecoder.instances[0] };
+  }
+
+  test("a runtime with WebCodecs offers h264 in its hello, and one without offers nothing", () => {
+    const h = harness();
+    act(() => h.socket().open());
+    expect(h.socket().sent[0]).toBe('{"cmd":"hello","accept":["h264"]}');
+    h.unmount();
+
+    vi.stubGlobal("VideoDecoder", undefined);
+    const plain = harness();
+    act(() => plain.socket().open());
+    expect(plain.socket().sent[0]).toBe('{"cmd":"hello","accept":[]}');
+    plain.unmount();
+  });
+
+  test("the video message configures the decoder and is the only place the surface rect comes from", () => {
+    const { h, dec } = streaming();
+    expect(dec.configured).toEqual({ codec: "avc1.42E01E", optimizeForLatency: true });
+
+    // The rect is on the announcement, not on each picture — a decoded frame carries no header at all.
+    act(() => h.socket().deliver(unit(true)));
+    act(() => { dec.emit(); });
+    const frameNow = h.api().frameRef.current!;
+    expect([frameNow.sx, frameNow.sy, frameNow.sw, frameNow.sh]).toEqual([0, 0, 1920, 1080]);
+    h.unmount();
+  });
+
+  test("the tag byte says key or delta, which the decoder cannot work out from the bytes", () => {
+    const { h, dec } = streaming();
+    act(() => h.socket().deliver(unit(true, [1, 2])));
+    act(() => h.socket().deliver(unit(false, [3, 4])));
+
+    expect(dec.chunks.map((c) => c.type)).toEqual(["key", "delta"]);
+    // The tag is stripped: what reaches the decoder is the access unit and nothing else.
+    expect([...dec.chunks[0].data]).toEqual([1, 2]);
+    h.unmount();
+  });
+
+  test("each picture is released only once its replacement is drawn", () => {
+    const { h, dec } = streaming();
+    act(() => h.socket().deliver(unit(true)));
+    let first!: FakeVideoFrame;
+    act(() => { first = dec.emit(); });
+    expect(first.closed).toBe(false);
+
+    act(() => h.socket().deliver(unit(false)));
+    act(() => { dec.emit(); });
+    // A VideoFrame left unclosed stalls the decoder within a few frames; one closed early draws as a blank.
+    expect(first.closed).toBe(true);
+    h.unmount();
+  });
+
+  test("a null codec ends the stream and JPEG frames are read again", async () => {
+    const { h, dec } = streaming();
+    act(() => h.socket().deliver(JSON.stringify({ type: "video", codec: null })));
+    expect(dec.closed).toBe(true);
+
+    act(() => h.socket().deliver(frame(0, 0, 640, 480)));
+    decoder.finish();
+    await settle();
+    expect(h.api().frameRef.current!.sw).toBe(640);
+    h.unmount();
+  });
+
+  test("a decoder that cannot be configured tells the server to go back to JPEG", () => {
+    FakeVideoDecoder.refuseConfigure = true;
+    const h = harness();
+    act(() => h.socket().open());
+    act(() => h.socket().deliver(START));
+
+    // Saying so is the whole recovery: without it the server keeps sending a format this phone cannot read
+    // and the canvas simply stops, with nothing anywhere to explain it.
+    expect(h.socket().sent).toContain('{"cmd":"hello","accept":[]}');
+    h.unmount();
+  });
+
+  test("a decoder that errors mid-stream does the same", () => {
+    const { h, dec } = streaming();
+    act(() => dec.init.error(new Error("hardware decoder gone")));
+
+    expect(dec.closed).toBe(true);
+    expect(h.socket().sent).toContain('{"cmd":"hello","accept":[]}');
+    h.unmount();
+  });
+
+  test("a closed socket takes the decoder with it", () => {
+    const { h, dec } = streaming();
+    act(() => h.socket().close());
+    // A decoder outliving its socket decodes into a frame nothing draws, and holds a hardware context open.
+    expect(dec.closed).toBe(true);
+    h.unmount();
+  });
 });

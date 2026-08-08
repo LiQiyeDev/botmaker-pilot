@@ -33,9 +33,19 @@ export interface TelemetryEvent {
   _exp?: number;
 }
 
-/** A decoded binary video frame: the JPEG bitmap plus the absolute surface rect its (0,0) maps to. */
+/**
+ * A decoded picture plus the absolute surface rect its (0,0) maps to.
+ *
+ * `bitmap` is whichever of the two paths produced it: an `ImageBitmap` decoded from a JPEG frame, or a
+ * `VideoFrame` out of the H.264 decoder. They are interchangeable everywhere it matters — both are a
+ * `CanvasImageSource` that `drawImage` takes, and both are released with `.close()` — which is what let the
+ * video path reuse the renderer, the fit maths and the telemetry overlay untouched.
+ *
+ * The rect is *not* the picture's pixel size and never has been: it is the surface the picture is *of*, in
+ * absolute screen coordinates, which is what lets the stream be downscaled without moving a single tap.
+ */
 export interface Frame {
-  bitmap: ImageBitmap;
+  bitmap: CanvasImageSource & { close(): void };
   sx: number;
   sy: number;
   sw: number;
@@ -60,7 +70,30 @@ export interface InputCmd {
 export type ControlCmd =
   | { cmd: "start" | "stop" | "pause" | "resume" }
   | { cmd: "interact"; on: boolean }
+  | HelloCmd
   | InputCmd;
+
+/**
+ * What this client can decode. Sent on connect, and *again* with an empty `accept` if the decoder later turns
+ * out not to work — a WebView can advertise `VideoDecoder` and still refuse the stream, and telling the server
+ * to stop sending H.264 is the only recovery that ends with a picture on screen.
+ *
+ * Saying nothing at all is a valid client: Studio serves JPEG to anyone who never says hello, which is every
+ * build of this app that predates the video path.
+ */
+export interface HelloCmd {
+  cmd: "hello";
+  accept: "h264"[];
+}
+
+/** A running H.264 stream, as announced by `{"type":"video",…}`. A null codec ends one. */
+export interface VideoStreamInfo {
+  codec: string;
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+}
 
 export type ConnStatus = "connecting" | "connected" | "reconnecting" | "closed";
 
