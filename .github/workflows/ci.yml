@@ -50,7 +50,11 @@ jobs:
     needs: web
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth 0 because JReleaser builds this release's notes from the commits since the previous
+      # tag, and a shallow clone has neither the previous tag nor the commits.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -73,10 +77,27 @@ jobs:
           npx cap sync android
           cd android && ./gradlew assembleDebug --no-daemon
 
+      # The name is part of a contract, not a convenience: Studio's Remote Pilot QR code points at
+      # releases/latest/download/botpilot.apk, so a phone scanning it gets a 404 the moment this is renamed.
       - name: Stage APK as botpilot.apk
         run: cp android/app/build/outputs/apk/debug/app-debug.apk botpilot.apk
 
-      - name: Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
+      # Without the `v` — jreleaser.yml's tagName is `v{{projectVersion}}`, so passing the tag whole would
+      # have it look for `vv0.1.0`.
+      - name: Resolve the version from the tag
+        run: echo "JRELEASER_PROJECT_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      # The release, its assets and its notes are declared in jreleaser.yml. The tag is not — it was pushed
+      # by the umbrella's release.sh, which is what orders a release across the eight repositories, the one
+      # thing JReleaser has no way to express.
+      #
+      # This replaced softprops/action-gh-release, which attached the APK with NO BODY AT ALL. This
+      # repository has no CHANGELOG.md and is the one module release.sh's changelog gate exempts, so the
+      # notes are JReleaser's own commit-log changelog since the previous tag — strictly more than before.
+      - name: Publish GitHub Release
+        uses: jreleaser/release-action@v2
         with:
-          files: botpilot.apk
+          version: 1.25.0
+          arguments: full-release
+        env:
+          JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

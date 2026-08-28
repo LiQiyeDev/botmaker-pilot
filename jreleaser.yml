@@ -1,0 +1,58 @@
+# JReleaser — what ONE release of this repository looks like.
+#
+# The pilot is the odd one out of the eight: a client app, not a library, not in the umbrella's Maven
+# reactor, and pinned by nothing. Tagging it simply builds the APK and attaches it to a release. So the
+# split with the umbrella's release.sh is the same as everywhere else but with less on the umbrella's side:
+# release.sh decides and pushes the tag, this file says what the tag's release is.
+#
+# WHERE THIS RUNS: this repository's own CI, on a version tag — .github/workflows/ci.yml, the `apk` job.
+# NOT from the umbrella working copy: JReleaser's JGit cannot open a submodule (`.git` is a `gitdir:` FILE
+# there and it reports "repository not found"), and --git-root-search gets past that only by resolving the
+# UMBRELLA repository. A CI checkout is standalone.
+#
+# THE VERSION ARRIVES AS JRELEASER_PROJECT_VERSION, set by the workflow from the tag.
+#
+# THE ASSET NAME IS PART OF THE CONTRACT. Studio's Remote Pilot dialog shows a QR code pointing at
+# https://github.com/LiQiyeDev/botmaker-pilot/releases/latest/download/botpilot.apk — a permalink that
+# resolves through the *newest* release to an asset named exactly `botpilot.apk`. Rename the file and every
+# phone that scans that code gets a 404.
+
+project:
+  name: botmaker-pilot
+  description: The BotMaker Pilot — a phone as a second screen for a running bot.
+  longDescription: |
+    A Capacitor + React client that pairs with Studio by QR code and shows a bot's live view, letting the
+    operator watch and take over from a phone. Studio's Remote Pilot dialog links the newest APK directly,
+    so cutting a release here is how a new build reaches phones.
+  authors:
+    - LiQiyeDev
+  license: CC0-1.0
+  copyright: LiQiyeDev
+  inceptionYear: '2026'
+  links:
+    homepage: https://github.com/LiQiyeDev/botmaker-pilot
+
+release:
+  github:
+    owner: LiQiyeDev
+    name: botmaker-pilot
+    tagName: 'v{{projectVersion}}'
+    releaseName: 'v{{projectVersion}}'
+    # release.sh created and pushed the tag; that push is what started this workflow.
+    skipTag: true
+    overwrite: false
+    update:
+      enabled: false
+    prerelease:
+      pattern: .*-.*
+    # No `external` here, and no tools/changelog-section.sh either: this repository has no CHANGELOG.md and
+    # is the one module release.sh's check_changelog deliberately exempts. So the notes are JReleaser's own
+    # commit-log changelog since the previous tag — which is strictly more than the release used to carry,
+    # since the step this replaced attached the APK with no body at all. Give it a CHANGELOG.md and the
+    # other seven repositories' arrangement applies unchanged.
+    changelog:
+      formatted: ALWAYS
+
+files:
+  artifacts:
+    - path: botpilot.apk
